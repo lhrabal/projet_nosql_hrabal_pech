@@ -1,0 +1,41 @@
+services:
+  # Frontend
+  frontend:
+    build:
+      context: ./frontend
+    ports:
+      - "3000:80"
+    networks:
+      - backend
+
+  # Backend
+  backend:
+    build:
+      context: ./backend
+    ports:
+      - "8000:8000"
+    depends_on:
+      - mongodb
+      - redis
+    networks:
+      - backend
+
+  # MongoDB
+  mongodb:
+    image: mongo:latest
+    container_name: mongodb
+    volumes:
+      - ./data/mongodb:/data/db
+    networks:
+      - backend
+
+  # Redis
+  redis:
+    image: redis:latest
+    container_name: redis
+    networks:
+      - backend
+
+networks:
+  backend:
+    driver: bridge
