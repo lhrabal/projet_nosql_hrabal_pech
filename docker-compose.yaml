@@ -1,5 +1,4 @@
 services:
-  # Frontend
   frontend:
     build:
       context: ./frontend
@@ -8,7 +7,6 @@ services:
     networks:
       - backend
 
-  # Backend
   backend:
     build:
       context: ./backend
@@ -16,11 +14,10 @@ services:
       - "8000:8000"
     depends_on:
       - mongodb
-      - redis
+      - postgres
     networks:
       - backend
 
-  # MongoDB
   mongodb:
     image: mongo:latest
     container_name: mongodb
@@ -29,10 +26,17 @@ services:
     networks:
       - backend
 
-  # Redis
-  redis:
-    image: redis:latest
-    container_name: redis
+  postgres:
+    image: postgres:15
+    environment:
+      POSTGRES_USER: user
+      POSTGRES_PASSWORD: password
+      POSTGRES_DB: nosql_project
+      PGDATA: /var/lib/postgresql/data/pgdata
+    ports:
+      - "8001:5432"
+    volumes:
+      - ./data/postgres:/var/lib/postgresql/data
     networks:
       - backend
 

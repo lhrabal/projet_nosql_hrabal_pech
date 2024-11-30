@@ -1,22 +1,17 @@
-FROM python:3.11-slim
+# Base image
+FROM python:3.10-slim
 
-# Installer les dépendances système nécessaires
-RUN apt-get update && apt-get install -y gcc && rm -rf /var/lib/apt/lists/*
-
-# Définir le répertoire de travail
+# Set the working directory
 WORKDIR /app
 
-# Copier les dépendances du projet
-COPY requirements.txt ./
-
-# Installer les dépendances Python
-RUN pip install --no-cache-dir -r requirements.txt
-
-# Copier le code de l'application
+# Copy files to the container
 COPY . .
 
-# Exposer le port pour l'application
+# Install dependencies
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Expose the backend port
 EXPOSE 8000
 
-# Lancer le serveur FastAPI avec Uvicorn
+# Command to run the application
 CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]

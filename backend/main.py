@@ -1,71 +1,107 @@
-from fastapi import FastAPI, HTTPException
-from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel
-from motor.motor_asyncio import AsyncIOMotorClient
-import redis.asyncio as redis
 import os
+import motor.motor_asyncio
+import asyncio
+import asyncpg
+from fastapi import FastAPI, HTTPException
+from pydantic import BaseModel
+from fastapi.middleware.cors import CORSMiddleware
 from dotenv import load_dotenv
 
 # Charger les variables d'environnement
 load_dotenv()
 
-# Configuration MongoDB et Redis
+# Configuration MongoDB
 MONGO_URI = os.getenv("MONGO_URI", "mongodb://mongodb:27017")
-REDIS_HOST = os.getenv("REDIS_HOST", "redis")
-REDIS_PORT = int(os.getenv("REDIS_PORT", 6379))
-
-# Initialisation des clients
-mongo_client = AsyncIOMotorClient(MONGO_URI)
+mongo_client = motor.motor_asyncio.AsyncIOMotorClient(MONGO_URI)
 mongo_db = mongo_client["nosql_project"]
-redis_client = redis.Redis(host=REDIS_HOST, port=REDIS_PORT)
 
-# Initialisation de l'application FastAPI
+# Configuration PostgreSQL
+POSTGRES_USER = os.getenv("POSTGRES_USER", "user")
+POSTGRES_PASSWORD = os.getenv("POSTGRES_PASSWORD", "password")
+POSTGRES_DB = os.getenv("POSTGRES_DB", "nosql_project")
+POSTGRES_HOST = os.getenv("POSTGRES_HOST", "postgres")
+POSTGRES_PORT = os.getenv("POSTGRES_PORT", "5432")
+
+# Initialisation de FastAPI
 app = FastAPI()
-
-origins = [
-    "http://localhost:3000",
-    "http://localhost:8000",
-]
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=origins,
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
+
+# Connexion PostgreSQL
+async def get_postgres_connection():
+    for _ in range(5):  # Réessayer 5 fois
+        try:
+            conn = await asyncpg.connect(
+                user=POSTGRES_USER,
+                password=POSTGRES_PASSWORD,
+                database=POSTGRES_DB,
+                host=POSTGRES_HOST,
+                port=POSTGRES_PORT,
+            )
+            await conn.execute("""
+            CREATE TABLE IF NOT EXISTS form_data (
+                id SERIAL PRIMARY KEY,
+                message TEXT NOT NULL
+            );
+            """)
+            return conn
+        except Exception as e:
+            print(f"PostgreSQL connection failed: {e}. Retrying...")
+            await asyncio.sleep(5)  # Attendre 5 secondes avant de réessayer
+    raise HTTPException(status_code=500, detail="Unable to connect to PostgreSQL.")
+
+
+# Modèle de données
 class FormData(BaseModel):
     message: str
 
+# Route pour soumettre des données (MongoDB et PostgreSQL)
 @app.post("/submit")
 async def submit_data(data: FormData):
     try:
-        await mongo_db.forms.insert_one(data.dict())
+        # Sauvegarde dans MongoDB
+        mongo_collection = mongo_db.get_collection("form_data")
+        await mongo_collection.insert_one({"message": data.message})
 
-        await redis_client.set("form_data", data.message)
+        # Sauvegarde dans PostgreSQL
+        conn = await get_postgres_connection()
+        await conn.execute(
+            "INSERT INTO form_data(message) VALUES($1)", data.message
+        )
+        await conn.close()
 
-        return {"message": "Data saved in MongoDB and Redis!"}
+        return {"message": "Data saved in MongoDB and PostgreSQL!"}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-@app.get("/data/redis")
-async def get_redis_data():
-    value = await redis_client.get("form_data")
-    if value is None:
-        return {"error": "Key not found"}
-    
-    data = value.decode("utf-8")
-    
-    return {"form_data": data}
+# Route pour récupérer les données de PostgreSQL
+@app.get("/data/postgres")
+async def get_postgres_data():
+    try:
+        conn = await get_postgres_connection()
+        result = await conn.fetch("SELECT id, message FROM form_data")
+        await conn.close()
 
+        data = [{"id": record["id"], "message": record["message"]} for record in result]
+        return {"form_data": data}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+# Route pour récupérer les données de MongoDB
 @app.get("/data/mongodb")
 async def get_mongo_data():
-    cursor = mongo_db.forms.find({})
-    
-    data = []
-    async for document in cursor:
-        document["_id"] = str(document["_id"])
-        data.append(document)
-    
-    return {"data": data}
+    try:
+        mongo_collection = mongo_db.get_collection("form_data")
+        cursor = mongo_collection.find()
+
+        data = [{"_id": str(record["_id"]), "message": record["message"]} for record in await cursor.to_list(length=100)]
+        return {"form_data": data}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
