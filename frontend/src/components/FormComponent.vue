@@ -26,10 +26,10 @@
         </button>
       </section>
 
-      <section v-if="ESData || mongoData" class="data-section">
+      <section v-if="pgdata || mongoData" class="data-section">
         <div class="card">
           <h3>Données postgres</h3>
-          <table v-if="ESData" class="data-table">
+          <table v-if="pgdata" class="data-table">
             <thead>
               <tr>
                 <th>Clé</th>
@@ -37,7 +37,7 @@
               </tr>
             </thead>
             <tbody>
-              <tr v-for="content in ESData" :key="content.id">
+              <tr v-for="content in pgdata" :key="content.id">
                 <td>{{ content.id }}</td>
                 <td>{{ content.message }}</td>
               </tr>
@@ -74,7 +74,7 @@ export default {
   data() {
     return {
       newMessage: "",
-      ESData: null,
+      pgdata: null,
       mongoData: null,
     };
   },
@@ -93,7 +93,7 @@ export default {
     async fetchData() {
       try {
         const ESResponse = await axios.get("http://localhost:8000/data/postgres");
-        this.ESData = ESResponse.data.formongodbm_data;
+        this.pgdata = ESResponse.data.form_data;
 
         const mongoResponse = await axios.get("http://localhost:8000/data/mongodb");
         this.mongoData = mongoResponse.data.form_data;
