@@ -20,12 +20,6 @@
         </form>
       </section>
 
-      <section class="action-section">
-        <button @click="fetchData" class="secondary-button">
-          Voir les données
-        </button>
-      </section>
-
       <section v-if="pgdata || mongoData" class="data-section">
         <div class="card">
           <h3>Données postgres</h3>
@@ -76,12 +70,13 @@ export default {
       newMessage: "",
       pgdata: null,
       mongoData: null,
+      URL: "http://localhost:8000"
     };
   },
   methods: {
     async sendMessage() {
       try {
-        await axios.post("http://localhost:8000/submit", {
+        await axios.post(this.URL +"/submit", {
           message: this.newMessage,
         });
         this.newMessage = "";
@@ -92,10 +87,10 @@ export default {
     },
     async fetchData() {
       try {
-        const ESResponse = await axios.get("http://localhost:8000/data/postgres");
-        this.pgdata = ESResponse.data.form_data;
+        const pgResponse = await axios.get(this.URL + "/data/postgres");
+        this.pgdata = pgResponse.data.form_data;
 
-        const mongoResponse = await axios.get("http://localhost:8000/data/mongodb");
+        const mongoResponse = await axios.get(this.URL + "/data/mongodb");
         this.mongoData = mongoResponse.data.form_data;
       } catch (error) {
         console.error("Erreur lors de la récupération des données :", error);
